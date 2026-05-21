@@ -5,6 +5,19 @@
 
 'use strict';
 
+// ── POLYFILL: CanvasRenderingContext2D.ellipse ────────────────
+// Some older browsers / WebViews lack ctx.ellipse, which crashes rendering silently.
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.ellipse) {
+  CanvasRenderingContext2D.prototype.ellipse = function(cx, cy, rx, ry, rotation, startAngle, endAngle, ccw) {
+    this.save();
+    this.translate(cx, cy);
+    this.rotate(rotation);
+    this.scale(rx, ry);
+    this.arc(0, 0, 1, startAngle, endAngle, ccw);
+    this.restore();
+  };
+}
+
 // Safe localStorage wrapper to prevent crashes in iframe / file:// sandboxes
 const safeStorage = {
   getItem(key) {
@@ -1030,6 +1043,8 @@ class Game {
     this.pupObjs   = [];
     this.particles = [];
     this.popups    = [];
+    this.fireballs = []; // Prevent undefined reference during START state rendering
+    this.fireballSpawnT = 0;
 
     this.speed     = CFG.baseSpeed;
     this.spawnT    = 0;
@@ -1078,8 +1093,13 @@ class Game {
   // ── Resize ────────────────────────────────────────────────
   _resize() {
     const p = this.canvas.parentElement;
-    this.W = p.clientWidth;
-    this.H = p.clientHeight;
+    this.W = p ? p.clientWidth : window.innerWidth;
+    this.H = p ? p.clientHeight : window.innerHeight;
+    
+    // Safety fallback to prevent divide-by-zero or negative boundaries if styling isn't loaded yet
+    if (this.W <= 0) this.W = 400;
+    if (this.H <= 0) this.H = 800;
+
     this.canvas.width  = this.W * this.dpr;
     this.canvas.height = this.H * this.dpr;
     this.ctx.scale(this.dpr, this.dpr);
@@ -1336,11 +1356,15 @@ class Game {
 
   // ── Main loop ─────────────────────────────────────────────
   _loop(ts) {
-    if (!this.lastTS) this.lastTS = ts;
-    const dt = Math.min(ts - this.lastTS, 50);
-    this.lastTS = ts;
-    this._update(dt, ts);
-    this._render(ts);
+    try {
+      if (!this.lastTS) this.lastTS = ts;
+      const dt = Math.min(ts - this.lastTS, 50);
+      this.lastTS = ts;
+      this._update(dt, ts);
+      this._render(ts);
+    } catch (err) {
+      console.error('[Hell Gravity Dash] Loop error:', err);
+    }
     requestAnimationFrame(t => this._loop(t));
   }
 
