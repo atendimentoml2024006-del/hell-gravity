@@ -22,15 +22,20 @@ class AudioEngine {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
 
-    this.ctx = new AC();
+    try {
+      this.ctx = new AC();
+      
+      // Master gain
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.28, this.ctx.currentTime);
+      this.masterGain.connect(this.ctx.destination);
 
-    // Master gain
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.28, this.ctx.currentTime);
-    this.masterGain.connect(this.ctx.destination);
-
-    // Simple reverb (convolver with noise impulse)
-    this._buildReverb();
+      // Simple reverb (convolver with noise impulse)
+      this._buildReverb();
+    } catch (e) {
+      console.warn("Failed to initialize AudioContext:", e);
+      this.ctx = null;
+    }
   }
 
   _buildReverb() {

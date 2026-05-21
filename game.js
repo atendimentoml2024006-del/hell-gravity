@@ -5,6 +5,16 @@
 
 'use strict';
 
+// Safe localStorage wrapper to prevent crashes in iframe / file:// sandboxes
+const safeStorage = {
+  getItem(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  },
+  setItem(key, val) {
+    try { localStorage.setItem(key, val); } catch (e) {}
+  }
+};
+
 // ── CONFIG ───────────────────────────────────────────────────
 const CFG = {
   gravity:          0.58,
@@ -662,7 +672,11 @@ class Obstacle {
     // Handle
     ctx.fillStyle = '#4a2800';
     ctx.beginPath();
-    ctx.roundRect(tx - 3, ty - 18, 6, 16, 2);
+    if (ctx.roundRect) {
+      ctx.roundRect(tx - 3, ty - 18, 6, 16, 2);
+    } else {
+      ctx.rect(tx - 3, ty - 18, 6, 16);
+    }
     ctx.fill();
     // Fire glow
     ctx.shadowBlur = 20 + flicker * 2;
@@ -1007,7 +1021,7 @@ class Game {
     this.state = 'START'; // START | PLAYING | GAMEOVER
     this.score = 0;
     this.coins = 0;
-    this.highScore = +localStorage.getItem('hgd_hs') || 0;
+    this.highScore = +safeStorage.getItem('hgd_hs') || 0;
     this.isNewRecord = false;
 
     this.player    = null;
@@ -1026,7 +1040,7 @@ class Game {
     this.activePup     = null;
     this.pupTimeLeft   = 0;
     this.pupDuration   = 6000;
-    this.isMuted       = localStorage.getItem('hgd_muted') === 'true';
+    this.isMuted       = safeStorage.getItem('hgd_muted') === 'true';
     this.keys          = { up: false, down: false, left: false, right: false };
 
     this.bg = new Background();
@@ -1119,7 +1133,7 @@ class Game {
     this.$muteBtn.addEventListener('click', e => {
       e.stopPropagation();
       this.isMuted = !this.isMuted;
-      localStorage.setItem('hgd_muted', this.isMuted);
+      safeStorage.setItem('hgd_muted', this.isMuted);
       gameAudio.setMute(this.isMuted);
       this._updateMuteUI();
     });
@@ -1191,7 +1205,7 @@ class Game {
       const s = Math.floor(this.score);
       if (s > this.highScore) {
         this.highScore = s;
-        localStorage.setItem('hgd_hs', s);
+        safeStorage.setItem('hgd_hs', s);
         this.isNewRecord = true;
         this.$newRecord.classList.add('visible');
       }
@@ -1563,6 +1577,10 @@ class Game {
 }
 
 // ── Bootstrap ────────────────────────────────────────────────
-window.addEventListener('load', () => {
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
   window.hellGD = new Game();
-});
+} else {
+  window.addEventListener('load', () => {
+    window.hellGD = new Game();
+  });
+}
